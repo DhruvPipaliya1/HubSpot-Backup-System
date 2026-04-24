@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Extractor/Extractor.csproj" Id="89af4fdc-7faf-4345-a00e-4bf7cfa61ab8" />
+  <Project Path="HubSpotBackupSystem/HubSpotBackupSystem.csproj" />
+  <Project Path="Receiver/Receiver.csproj" Id="b77083db-a346-4797-bffa-953d14791932" />
+</Solution>
