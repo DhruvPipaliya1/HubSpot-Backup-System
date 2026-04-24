@@ -3,6 +3,7 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Data;
 
 namespace Extractor
 {
@@ -19,15 +20,16 @@ namespace Extractor
                 {
                     con.Open();
 
-                    string query = "INSERT INTO QueueTable(userId, directoryId, objectId, status, createdAt) VALUES (@userId, @directoryId, @objectId, @status, @createdAt)";
-
-                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
-                        cmd.Parameters.AddWithValue("@userId", userId);
-                        cmd.Parameters.AddWithValue("@directoryId", directoryId);
-                        cmd.Parameters.AddWithValue("@objectId", objectId);
-                        cmd.Parameters.AddWithValue("@status", 1);
-                        cmd.Parameters.AddWithValue("@createdAt", DateTime.Now);
+                        cmd.CommandType = CommandType.StoredProcedure;
+
+                        cmd.Parameters.AddWithValue("@IsInsertObjectInDb", 1);
+                        cmd.Parameters.AddWithValue("@QuserId", userId);
+                        cmd.Parameters.AddWithValue("@QdirectoryId", directoryId);
+                        cmd.Parameters.AddWithValue("@QobjectId", objectId);
+                        cmd.Parameters.AddWithValue("@Status", 1);
+                        cmd.Parameters.AddWithValue("@QcreatedAt", DateTime.Now);
 
                         cmd.ExecuteNonQuery();
                     }
@@ -51,11 +53,11 @@ namespace Extractor
                 {
                     con.Open();
 
-                    string query = "UPDATE FolderBackup SET directoryStatus = @directoryStatus WHERE id = @id";
-
-                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
-                        cmd.Parameters.AddWithValue("@id", dirId);
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@IsUpdateDirectoryStatus", 1);
+                        cmd.Parameters.AddWithValue("@FolderId", dirId);
                         cmd.Parameters.AddWithValue("@directoryStatus", status);
 
                         cmd.ExecuteNonQuery();
@@ -80,11 +82,11 @@ namespace Extractor
                 {
                     con.Open();
 
-                    string query = "SELECT accessToken FROM users WHERE id = @id";
-
-                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
-                        cmd.Parameters.AddWithValue("@id", user);
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@IsGetAccessToken", 1);
+                        cmd.Parameters.AddWithValue("@UuserId", user);
 
                         using (SqlDataReader reader = cmd.ExecuteReader())
                         {
@@ -115,13 +117,11 @@ namespace Extractor
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
-
-                    string query = @"SELECT NameKeyword, DateFrom, DateTo 
-                             FROM SearchFilter 
-                             WHERE UserId = @UserId AND ObjectType = @ObjectType";
-
-                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
+                        cmd.CommandType = CommandType.StoredProcedure;
+
+                        cmd.Parameters.AddWithValue("@IsGetSearchFilter", 1);
                         cmd.Parameters.AddWithValue("@UserId", userId);
                         cmd.Parameters.AddWithValue("@ObjectType", objectType);
 
