@@ -3,7 +3,6 @@ using RabbitMQ.Client.Events;
 using Receiver;
 using Receiver.Models;
 using Serilog;
-using System.Collections;
 using System.Text;
 using System.Text.Json;
 
@@ -44,7 +43,7 @@ namespace Receiver
                 await channel.BasicQosAsync(0, 5, false);
 
                 var consumer = new AsyncEventingBasicConsumer(channel);
-
+                
                 consumer.ReceivedAsync += async (sender, ea) =>
                 {
                     var body = ea.Body.ToArray();
@@ -60,23 +59,27 @@ namespace Receiver
 
                         if (queueEntries.Count == 0)
                         {
-                            Log.Information("[INFO] No matching entries found with status 1.");
+                            Log.Information("[INFO] No matching entries found.");
                             await channel.BasicAckAsync(ea.DeliveryTag, false);
                             return;
                         }
 
+                        // Fetch once before the loop — no repeated API calls
+                        string accessToken = DbOperation.GetAccessToken(data.userId);
+                        string portalName = await HubspotApi.GetPortalNameAsync(accessToken);
 
                         foreach (QueueItem entry in queueEntries)
                         {
+                            // Mark in-progress
+                            DbOperation.UpdateQueueEntryStatus(entry.Id, 2);
+
                             string objectType = DbOperation.GetObjectTypeByDirectoryId(entry.DirectoryId);
-                            string accessToken = DbOperation.GetAccessToken(data.userId);
 
                             JsonElement record = await HubspotApi.GetRecordAsync(accessToken, objectType, entry.ObjectId);
 
-                            //Apply filter check 
+                            // ── Filter 1: Name keyword ────────────────────────────────────────────
                             var (nameKeyword, dateFrom, dateTo) = DbOperation.GetSearchFilter(data.userId, objectType);
 
-                            // Check name filter
                             if (!string.IsNullOrEmpty(nameKeyword))
                             {
                                 string name = "";
@@ -90,45 +93,49 @@ namespace Receiver
                                 if (!name.Contains(nameKeyword, StringComparison.OrdinalIgnoreCase))
                                 {
                                     Log.Information($"[SKIP] ObjectId={entry.ObjectId} name '{name}' does not match keyword '{nameKeyword}'");
-                                    DbOperation.UpdateQueueEntryStatus(entry.Id, 2);
+                                    DbOperation.UpdateQueueEntryStatus(entry.Id, 3);
                                     continue;
                                 }
                             }
 
-                            // Check date range filter
+                            // ── Filter 2: Date range ──────────────────────────────────────────────
                             DateTime currentCreated = record.GetProperty("createdAt").GetDateTime();
 
                             if (dateFrom.HasValue && currentCreated < dateFrom.Value)
                             {
                                 Log.Information($"[SKIP] ObjectId={entry.ObjectId} createdAt={currentCreated} is before DateFrom={dateFrom.Value}");
-                                DbOperation.UpdateQueueEntryStatus(entry.Id, 2);
+                                DbOperation.UpdateQueueEntryStatus(entry.Id, 3);
                                 continue;
                             }
 
                             if (dateTo.HasValue && currentCreated > dateTo.Value)
                             {
                                 Log.Information($"[SKIP] ObjectId={entry.ObjectId} createdAt={currentCreated} is after DateTo={dateTo.Value}");
-                                DbOperation.UpdateQueueEntryStatus(entry.Id, 2);
+                                DbOperation.UpdateQueueEntryStatus(entry.Id, 3);
                                 continue;
                             }
 
-                            // Passed all filters — proceed with backup
+                            // ── Filter 3: Modified check ──────────────────────────────────────────
                             DateTime currentModified = record.GetProperty("updatedAt").GetDateTime();
                             DateTime? lastModified = DbOperation.GetLastModifiedByObjectId(entry.ObjectId);
 
                             if (lastModified.HasValue && currentModified <= lastModified.Value)
                             {
-                                Log.Information($"[SKIP] ObjectId={entry.ObjectId} not modified.");
+                                Log.Information($"[SKIP] ObjectId={entry.ObjectId} not modified. DB={lastModified.Value} | HubSpot={currentModified}");
+                                DbOperation.UpdateQueueEntryStatus(entry.Id, 3);
                                 continue;
                             }
 
-                            string originalLocation = record.GetProperty("url").GetString();
+                            // ── Passed all filters — proceed with backup ──────────────────────────
+                            string originalLocation = $@"hubspot\{portalName}\{objectType}\{entry.ObjectId}";
+                            string hubspotUrl = record.GetProperty("url").GetString();
 
                             int insertedId = DbOperation.InsertHubspotEntryAndGetId(
                                 userId: data.userId,
                                 directoryId: entry.DirectoryId,
                                 objectId: entry.ObjectId,
                                 originalLocation: originalLocation,
+                                hubSpotUrl: hubspotUrl,
                                 created: currentCreated,
                                 modified: currentModified
                             );
@@ -136,15 +143,34 @@ namespace Receiver
                             if (insertedId <= 0)
                                 throw new Exception($"DB insert failed for ObjectId={entry.ObjectId}");
 
-                            string nativeLocation = FileOperation.SaveJsonFile(insertedId, record);
-                            DbOperation.UpdateNativeLocation(insertedId, nativeLocation);
+                            DbOperation.UpdateCopyStatus(insertedId, 2);
+                            Log.Information("CopyStatus updated to 2");
+
+                            try
+                            {
+                                string nativeLocation = FileOperation.SaveJsonFile(insertedId, record);
+                                DbOperation.UpdateNativeLocation(insertedId, nativeLocation);
+
+                                // ── FileName and FileSize ─────────────────────────────────────────
+                                string fileName = HubspotApi.ExtractFileName(record, objectType);
+                                long fileSize = FileOperation.GetFileSize(nativeLocation);
+
+                                DbOperation.UpdateFileNameAndSize(insertedId, fileName, fileSize);
+
+                                DbOperation.UpdateCopyStatus(insertedId, 5);
+                                Log.Information("CopyStatus updated to 5");
+                            }
+                            catch (Exception e)
+                            {
+                                DbOperation.UpdateCopyStatus(insertedId, 3);
+                                Log.Information("Error during SaveJsonFile: " + e.Message);
+                                Log.Information("CopyStatus updated to 3");
+                            }
+
                             DbOperation.UpdateQueueEntryStatus(entry.Id, 5);
 
-                            Log.Information($"[DONE] Id={insertedId} | ObjectType={objectType} | File={nativeLocation}");
+                            Log.Information($"[DONE] Id={insertedId} | ObjectType={objectType} | Path={originalLocation} | URL={hubspotUrl}");
                         }
-
-                        // All entries done — update status to 5
-                        //DbOperation.UpdateWatchStatusForUser(data.userId, 5);
 
                         await channel.BasicAckAsync(ea.DeliveryTag, false);
                         Log.Information($"[ACK] userId={data.userId} processed successfully.");
@@ -167,7 +193,7 @@ namespace Receiver
             }
             catch (Exception ex)
             {
-                Log.Information("Error in Receiver: ", ex);
+                Log.Information("Error in Receiver: " + ex.Message);
             }
         }
     }

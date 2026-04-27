@@ -19,7 +19,7 @@ namespace HubSpotBackupSystem
 
         private static List<Process> workerProcesses = new List<Process>();
 
-
+         /// 
         /// <summary>
         /// Starts multiple worker processes for extractors and receivers required by the server.
         /// </summary>

@@ -19,15 +19,17 @@ namespace Receiver
         int directoryId,
         long objectId,
         string originalLocation,
+        string hubSpotUrl,
         DateTime created,
         DateTime modified)
         {
             try
             {
+                string json = GetUserDataSet(userId);
+
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
-
 
                     using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
@@ -37,8 +39,11 @@ namespace Receiver
                         cmd.Parameters.AddWithValue("@FolderFId", directoryId);
                         cmd.Parameters.AddWithValue("@FileObjectId", objectId);
                         cmd.Parameters.AddWithValue("@OriginalLocation", originalLocation ?? "");
+                        cmd.Parameters.AddWithValue("@hubSpotUrl", hubSpotUrl);
+                        cmd.Parameters.AddWithValue("@CopyStatus", 1);
                         cmd.Parameters.AddWithValue("@Created", created);
                         cmd.Parameters.AddWithValue("@Modified", modified);
+                        cmd.Parameters.AddWithValue("@FileDataSet", json);
 
                         return (int)cmd.ExecuteScalar();
                     }
@@ -47,6 +52,27 @@ namespace Receiver
             catch (Exception ex) { 
                 Log.Information("Error in InsertHubspotEntryAndGetId" + ex.Message);
                 return -1;
+            }
+        }
+
+
+        /// <summary>
+        /// Retrieves the data set associated with the specified user identifier from the database.
+        /// </summary>
+        public static string GetUserDataSet(int userId)
+        {
+            using (SqlConnection con = DbConnection.GetConnection())
+            {
+                con.Open();
+
+                using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@IsGetUserDataSet", 1);
+                    cmd.Parameters.AddWithValue("@UuserId", userId);
+
+                    return cmd.ExecuteScalar()?.ToString();
+                }
             }
         }
 
@@ -295,6 +321,65 @@ namespace Receiver
             }
 
             return (null, null, null);
+        }
+
+
+        /// <summary>
+        /// Updates the copy status of a file in the database using the specified file identifier and status value.
+        /// </summary>
+        public static void UpdateCopyStatus(int FileId, int Status)
+        {
+            try
+            {
+                using (SqlConnection con = DbConnection.GetConnection())
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@IsUpdateCopyStatus", 1);
+                        cmd.Parameters.AddWithValue("@FileId", FileId);
+                        cmd.Parameters.AddWithValue("@CopyStatus", Status);
+
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Information("Error in UpdateCopyStatus: " + ex.Message);
+            }
+        }
+
+
+        /// <summary>
+        /// Updates the file name and file size for the specified file backup record in the database.
+        /// </summary>
+        public static void UpdateFileNameAndSize(int id, string fileName, long fileSize)
+        {
+            try
+            {
+                using (SqlConnection con = DbConnection.GetConnection())
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand(@"
+                UPDATE FileBackup 
+                SET fileName = @fileName, fileSize = @fileSize 
+                WHERE id = @id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@id", id);
+                        cmd.Parameters.AddWithValue("@fileName", fileName);
+                        cmd.Parameters.AddWithValue("@fileSize", fileSize);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Information("Error in UpdateFileNameAndSize: " + ex.Message);
+            }
         }
     }
 }
