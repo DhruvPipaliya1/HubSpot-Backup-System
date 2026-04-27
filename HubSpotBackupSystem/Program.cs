@@ -8,8 +8,6 @@ namespace HuSpotBackupSystem
     
     class Program
     {
-        
-
         public static void ConfigureLogging(string appName)
         {
             Log.Logger = new LoggerConfiguration()
@@ -40,6 +38,10 @@ namespace HuSpotBackupSystem
             try
             {
                 await hw.SendMessageToQueue();
+            }
+            catch (Exception ex) 
+            {
+                Log.Information("Error in SendMessageToQueue: " + ex.Message);
             }
             finally
             {

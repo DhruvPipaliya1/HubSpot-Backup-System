@@ -16,6 +16,8 @@ namespace Extractor
         {
             try
             {
+                string json = GetUserDataSet(userId);
+
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
@@ -30,6 +32,7 @@ namespace Extractor
                         cmd.Parameters.AddWithValue("@QobjectId", objectId);
                         cmd.Parameters.AddWithValue("@Status", 1);
                         cmd.Parameters.AddWithValue("@QcreatedAt", DateTime.Now);
+                        cmd.Parameters.AddWithValue("@QDataSet", json);
 
                         cmd.ExecuteNonQuery();
                     }
@@ -38,6 +41,27 @@ namespace Extractor
             catch (Exception ex)
             {
                 Log.Information("Error in InsertObjectInDb" + ex.Message);
+            }
+        }
+
+
+        /// <summary>
+        /// Retrieves the user data set as a string for the specified user identifier by executing a stored procedure.
+        /// </summary>
+        public static string GetUserDataSet(int userId)
+        {
+            using (SqlConnection con = DbConnection.GetConnection())
+            {
+                con.Open();
+
+                using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@IsGetUserDataSet", 1);
+                    cmd.Parameters.AddWithValue("@UuserId", userId);
+
+                    return cmd.ExecuteScalar()?.ToString();
+                }
             }
         }
 

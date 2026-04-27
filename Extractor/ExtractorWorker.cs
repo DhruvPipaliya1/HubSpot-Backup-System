@@ -27,60 +27,7 @@ namespace Extractor
             await FetchObjectsFromHubspot(data.Id, data.userId, data.ObjectType);
         }
 
-        /*public static async Task<List<string>> FetchObjectsFromHubspot(int DirId, int UserId, string ObjectType)
-        {
-            List<string> result = new List<string>();
-
-            try
-            {
-                string accessToken = DbOperation.GetAccessToken(UserId);
-
-                if (string.IsNullOrEmpty(accessToken))
-                {
-                    Log.Information($"No access token for user {UserId}");
-                    return result;
-                }
-
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", accessToken);
-
-                var response = await httpClient.GetAsync($"https://api.hubapi.com/crm/v3/objects/{ObjectType}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Log.Information($"API Error: {response.StatusCode}");
-                    return result;
-                }
-
-                var content = await response.Content.ReadAsStringAsync();
-
-                JObject json = JObject.Parse(content);
-
-                var results = json["results"];
-
-                if (results != null)
-                {
-                    foreach (var item in results)
-                    {
-                        string objectId = item["id"]?.ToString();
-
-                        if (!string.IsNullOrEmpty(objectId))
-                        {
-                            result.Add(objectId);
-
-                            DbOperation.InsertObjectInDb(UserId, DirId, objectId);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Information($"Error: {ex.Message}");
-            }
-
-            return result;
-        }*/
-
+        
 
         /// <summary>
         /// Fetches a list of HubSpot object IDs for the specified object type, applying user-specific search filters if

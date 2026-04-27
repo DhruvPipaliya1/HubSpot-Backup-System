@@ -33,5 +33,22 @@ namespace Receiver
 
             return filePath;
         }
+
+
+        /// <summary>
+        /// Gets the size of the specified file in bytes.
+        /// </summary>
+        public static long GetFileSize(string filePath)
+        {
+            try
+            {
+                return new FileInfo(filePath).Length; // returns size in bytes
+            }
+            catch (Exception ex)
+            {
+                Log.Information($"Error in GetFileSize: {ex.Message}");
+                return 0;
+            }
+        }
     }
 }

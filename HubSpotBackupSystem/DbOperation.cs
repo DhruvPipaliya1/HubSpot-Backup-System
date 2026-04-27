@@ -23,7 +23,6 @@ namespace HubSpotBackupSystem
                 {
                     con.Open();
 
-
                     using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
                         cmd.CommandType = CommandType.StoredProcedure;
@@ -133,6 +132,8 @@ namespace HubSpotBackupSystem
         {
             try
             {
+                string json = GetUserDataSet(userId);
+
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
@@ -144,6 +145,7 @@ namespace HubSpotBackupSystem
                         cmd.Parameters.AddWithValue("@IsInsertDirectory", 1);
                         cmd.Parameters.AddWithValue("@UuserId", userId);
                         cmd.Parameters.AddWithValue("@DobjectType", objectType);
+                        cmd.Parameters.AddWithValue("@FolderDataSet", json);
 
                         cmd.ExecuteNonQuery();
                     }
@@ -154,6 +156,29 @@ namespace HubSpotBackupSystem
                 Log.Information("Error in InsertDirectory: " + ex.Message);
             }
         }
+
+
+        /// <summary>
+        /// Retrieves the data set associated with the specified user identifier from the database.
+        /// </summary>
+        public static string GetUserDataSet(int userId)
+        {
+            using (SqlConnection con = DbConnection.GetConnection())
+            {
+                con.Open();
+
+                using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@IsGetUserDataSet", 1);
+                    cmd.Parameters.AddWithValue("@UuserId", userId);
+
+                    return cmd.ExecuteScalar()?.ToString();
+                }
+            }
+        }
+
+
 
 
         /// <summary>
@@ -197,7 +222,7 @@ namespace HubSpotBackupSystem
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error in GetPendingDirectories: ", ex.Message);
+                Log.Information("Error in GetPendingDirectories: ", ex.Message);
             }
 
             return directories;
@@ -355,7 +380,7 @@ namespace HubSpotBackupSystem
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error in GetPendingDirectoryCount: " + ex.Message);
+                Log.Information("Error in GetPendingDirectoryCount: " + ex.Message);
                 return 1;
             }
         }
@@ -385,7 +410,7 @@ namespace HubSpotBackupSystem
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error in GetPendingQueueItemCount: " + ex.Message);
+                Log.Information("Error in GetPendingQueueItemCount: " + ex.Message);
                 return 0;
             }
         }
