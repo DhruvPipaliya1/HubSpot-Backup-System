@@ -402,7 +402,7 @@ namespace HubSpotBackupSystem
 
                         cmd.Parameters.AddWithValue("@IsGetPendingQueueItemCount", 1);
 
-                        object result = cmd.ExecuteScalar();
+                        var result = cmd.ExecuteScalar();
 
                         return result != null ? Convert.ToInt32(result) : 0;
                     }

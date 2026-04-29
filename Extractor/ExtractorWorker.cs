@@ -12,11 +12,10 @@ namespace Extractor
     {
         private static readonly HttpClient httpClient = new HttpClient();
 
-
         /// <summary>
         /// Processes the specified extractor message by retrieving related objects from HubSpot.
         /// </summary>
-        public static async Task ProcessExtractor(ExtractorMessage data)
+        public static async Task ProcessExtractor(ExtractorMessage data, string accessToken, string nameKeyword, DateTime? dateFrom, DateTime? dateTo)
         {
             if(data == null)
             {
@@ -24,116 +23,30 @@ namespace Extractor
                 return;
             }
 
-            await FetchObjectsFromHubspot(data.Id, data.userId, data.ObjectType);
+            await FetchObjectsFromHubspot(data.Id, data.userId, data.ObjectType, accessToken, nameKeyword, dateFrom, dateTo);
         }
-
         
-
+        
         /// <summary>
         /// Fetches a list of HubSpot object IDs for the specified object type, applying user-specific search filters if
         /// available.
         /// </summary>
-        public static async Task<List<string>> FetchObjectsFromHubspot(int DirId, int UserId, string ObjectType)
+        public static async Task<List<string>> FetchObjectsFromHubspot(int DirId, int UserId, string ObjectType, string accessToken, string nameKeyword, DateTime? dateFrom, DateTime? dateTo)
         {
             List<string> result = new List<string>();
 
             try
             {
-                string accessToken = DbOperation.GetAccessToken(UserId);
+                var service = new HubspotApi(httpClient);
 
-                if (string.IsNullOrEmpty(accessToken))
-                {
-                    Log.Information($"No access token for user {UserId}");
-                    return result;
-                }
+                JObject jsonResult = await service.FetchObjectsAsync(
+                    accessToken,
+                    ObjectType,
+                    nameKeyword,
+                    dateFrom,
+                    dateTo
+                );
 
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", accessToken);
-
-                // Fetch filters from DB for this user + objectType
-                var (nameKeyword, dateFrom, dateTo) = DbOperation.GetSearchFilter(UserId, ObjectType);
-
-                // Build HubSpot search filters
-                var filterGroups = new List<object>();
-                var filters = new List<object>();
-
-                if (!string.IsNullOrEmpty(nameKeyword))
-                {
-                    filters.Add(new
-                    {
-                        propertyName = "name",
-                        @operator = "CONTAINS_TOKEN",
-                        value = nameKeyword
-                    });
-                }
-
-                if (dateFrom.HasValue)
-                {
-                    filters.Add(new
-                    {
-                        propertyName = "createdate",
-                        @operator = "GTE",
-                        value = new DateTimeOffset(dateFrom.Value).ToUnixTimeMilliseconds().ToString()
-                    });
-                }
-
-                if (dateTo.HasValue)
-                {
-                    filters.Add(new
-                    {
-                        propertyName = "createdate",
-                        @operator = "LTE",
-                        value = new DateTimeOffset(dateTo.Value).ToUnixTimeMilliseconds().ToString()
-                    });
-                }
-
-                string content;
-
-                // Use Search API if filters exist, otherwise use basic list API
-                if (filters.Count > 0)
-                {
-                    filterGroups.Add(new { filters = filters });
-
-                    var searchBody = new
-                    {
-                        filterGroups = filterGroups,
-                        properties = new[] { "id", "name", "createdate" },
-                        limit = 100
-                    };
-
-                    var json = Newtonsoft.Json.JsonConvert.SerializeObject(searchBody);
-                    var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
-
-                    var searchResponse = await httpClient.PostAsync(
-                        $"https://api.hubapi.com/crm/v3/objects/{ObjectType}/search",
-                        httpContent
-                    );
-
-                    if (!searchResponse.IsSuccessStatusCode)
-                    {
-                        Log.Information($"Search API Error: {searchResponse.StatusCode}");
-                        return result;
-                    }
-
-                    content = await searchResponse.Content.ReadAsStringAsync();
-                }
-                else
-                {
-                    // No filters — use basic GET
-                    var basicResponse = await httpClient.GetAsync(
-                        $"https://api.hubapi.com/crm/v3/objects/{ObjectType}"
-                    );
-
-                    if (!basicResponse.IsSuccessStatusCode)
-                    {
-                        Log.Information($"API Error: {basicResponse.StatusCode}");
-                        return result;
-                    }
-
-                    content = await basicResponse.Content.ReadAsStringAsync();
-                }
-
-                JObject jsonResult = JObject.Parse(content);
                 var results = jsonResult["results"];
 
                 if (results != null)
@@ -156,7 +69,7 @@ namespace Extractor
             }
             catch (Exception ex)
             {
-                Log.Information($"Error: {ex.Message}");
+                Log.Error(ex, "Error in FetchObjectsFromHubspot");
             }
 
             return result;

@@ -221,13 +221,11 @@ namespace Receiver
         /// </summary>
         public static string GetObjectTypeByDirectoryId(int directoryId)
         {
-            object result = null;
             try
             {
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
-
 
                     using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
@@ -235,16 +233,15 @@ namespace Receiver
                         cmd.Parameters.AddWithValue("@IsGetObjectTypeByDirectoryId", 1);
                         cmd.Parameters.AddWithValue("@FolderId", directoryId);
 
-                        result = cmd.ExecuteScalar();
-
+                        return cmd.ExecuteScalar()?.ToString();
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Information("Error in GetObjectTypeByDirectoryId: ", ex.Message);
+                Log.Error(ex, "Error in GetObjectTypeByDirectoryId");
+                return null;
             }
-            return result != null ? result.ToString() : null;
         }
 
 
@@ -252,9 +249,8 @@ namespace Receiver
         /// <summary>
         /// Retrieves the access token associated with the specified user identifier.
         /// </summary>
-        public static string GetAccessToken(int userId)
+        public static string GetAccessToken()
         {
-            object result = null;
             try
             {
                 using (SqlConnection con = DbConnection.GetConnection())
@@ -266,18 +262,18 @@ namespace Receiver
                     {
                         cmd.CommandType = CommandType.StoredProcedure;
                         cmd.Parameters.AddWithValue("@IsGetAccessToken", 1);
-                        cmd.Parameters.AddWithValue("@UuserId", userId);
+                        cmd.Parameters.AddWithValue("@UuserId", 1);
 
-                        result = cmd.ExecuteScalar();
+                        var result = cmd.ExecuteScalar();
+                        return result == DBNull.Value ? null : result?.ToString();
                     }
                 }
             }
             catch (Exception ex)
             {
                 Log.Information("Error in GetAccessToken: ", ex.Message);
+                return null;
             }
-
-            return result != null ? result.ToString() : null;
         }
 
 
@@ -285,21 +281,19 @@ namespace Receiver
         /// <summary>
         /// Retrieves the search filter criteria for the specified user and object type.
         /// </summary>
-        public static (string nameKeyword, DateTime? dateFrom, DateTime? dateTo) GetSearchFilter(int userId, string objectType)
+        public static (string nameKeyword, DateTime? dateFrom, DateTime? dateTo) GetSearchFilter()
         {
             try
             {
                 using (SqlConnection con = DbConnection.GetConnection())
                 {
                     con.Open();
-
                     using (SqlCommand cmd = new SqlCommand("HubspotBackupProcedure", con))
                     {
                         cmd.CommandType = CommandType.StoredProcedure;
 
                         cmd.Parameters.AddWithValue("@IsGetSearchFilter", 1);
-                        cmd.Parameters.AddWithValue("@UserId", userId);
-                        cmd.Parameters.AddWithValue("@ObjectType", objectType);
+                        cmd.Parameters.AddWithValue("@UserId", 1);
 
                         using (SqlDataReader reader = cmd.ExecuteReader())
                         {
