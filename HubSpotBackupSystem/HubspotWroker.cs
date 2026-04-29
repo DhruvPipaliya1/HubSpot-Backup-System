@@ -12,7 +12,7 @@ namespace HubSpotBackupSystem
 {
     public class HubspotWroker
     {
-        private static readonly HttpClient httpClient = new HttpClient();
+        
 
         private const string ExtractorPath = @"C:\Users\HP\source\repos\HubSpotBackupSystem\Extractor\bin\Debug\net10.0\Extractor.exe";
         private const string ReceiverPath = @"C:\Users\HP\source\repos\HubSpotBackupSystem\Receiver\bin\Debug\net10.0\Receiver.exe";
@@ -83,15 +83,17 @@ namespace HubSpotBackupSystem
             {
                 var extractorQueue = await RabbitMQConnection.GetChannel().QueueDeclarePassiveAsync("HubspotExtractor");
                 var receiverQueue = await RabbitMQConnection.GetChannel().QueueDeclarePassiveAsync("HubspotReceiver");
+
                 uint extractorCount = extractorQueue.MessageCount;
                 uint receiverCount = receiverQueue.MessageCount;
+
                 int pendingDirs = DbOperation.GetPendingDirectoryCount();
                 int pendingQueue = DbOperation.GetPendingQueueItemCount();
 
                 Log.Information($"[Server] ExtractorQ={extractorCount} | ReceiverQ={receiverCount} | PendingDirs={pendingDirs} | PendingQueue={pendingQueue}");
 
                 if (extractorCount == 0 && pendingDirs == 0)
-                {
+                {   
                     var statusOneIds = DbOperation.GetQueueEntriesByStatus();
 
                     if (statusOneIds != null && statusOneIds.Count > 0)
@@ -150,7 +152,9 @@ namespace HubSpotBackupSystem
                     "tickets"
                 };
 
-                var customObjects = await GetCustomObject(user);
+                var hubspotApi = new HubspotApi();
+
+                var customObjects = await hubspotApi.GetCustomObject(user);
 
                 var allObjects = staticObjects.Concat(customObjects).Select(x => x.ToLower().Trim()).Distinct();
 
@@ -201,66 +205,7 @@ namespace HubSpotBackupSystem
 
 
 
-        /// <summary>
-        /// Retrieves the list of custom object schema names available to the specified user from the external API.
-        /// </summary>
-        public async Task<List<string>> GetCustomObject(int user)
-        {
-            List<string> result = new List<string>();
-
-            try
-            {
-                string accessToken = DbOperation.GetAccessToken(user);
-
-                if (string.IsNullOrEmpty(accessToken))
-                {
-                    Log.Information($"No access token for user {user}");
-                    return result;
-                }
-
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", accessToken);
-
-                var response = await httpClient.GetAsync("https://api.hubapi.com/crm/v3/schemas");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Log.Information($"API Error: {response.StatusCode}");
-
-                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                    {
-                        Log.Information("Token expired. Refresh needed.");
-                    }
-
-                    return result;
-                }
-
-                var content = await response.Content.ReadAsStringAsync();
-
-                JObject json = JObject.Parse(content);
-
-                var results = json["results"];
-
-                if (results != null)
-                {
-                    foreach (var item in results)
-                    {
-                        string name = item["name"]?.ToString();
-
-                        if (!string.IsNullOrEmpty(name))
-                        {
-                            result.Add(name);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Information($"Error in GetCustomObject: {ex.Message}");
-            }
-
-            return result;
-        }
+       
 
 
 

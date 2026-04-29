@@ -12,6 +12,7 @@ namespace Extractor
 {
     public class RabbitMQConnection
     {
+        public static string accessToken = null;
 
         /// <summary>
         /// Consumes messages from the RabbitMQ queue named "HubspotExtractor" and processes each message
@@ -21,6 +22,10 @@ namespace Extractor
         {
             try
             {
+                string accessToken = DbOperation.GetAccessToken();
+
+                var (nameKeyword, dateFrom, dateTo) = DbOperation.GetSearchFilter();
+
                 var factory = new ConnectionFactory()
                 {
                     HostName = "localhost"
@@ -38,16 +43,20 @@ namespace Extractor
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
 
+                    ExtractorMessage data = null;
+
                     try
                     {
-                        var data = JsonSerializer.Deserialize<ExtractorMessage>(message);
+                        data = JsonSerializer.Deserialize<ExtractorMessage>(message);
 
                         Log.Information($"[RECEIVED] user={data.userId}, dir={data.Id}, object={data.ObjectType}");
+
+                        
 
                         DbOperation.UpdateDirectoryStatus(data.Id, 2);
                         Log.Information("Update DirectoryStatus in Folderbackup to 2");
 
-                        await ExtractorWorker.ProcessExtractor(data);
+                        await ExtractorWorker.ProcessExtractor(data, accessToken, nameKeyword, dateFrom, dateTo);
 
                         DbOperation.UpdateDirectoryStatus(data.Id, 5);
                         Log.Information("Update DirectoryStatus in Folderbackup to 5");
@@ -58,8 +67,12 @@ namespace Extractor
                     }
                     catch (Exception ex)
                     {
-                        //DbOperation.UpdateDirectoryStatus(data.Id, 3);
-                        //Log.Information("Update DirectoryStatus in Folderbackup to 2");
+                        if(data != null)
+                        {
+                            DbOperation.UpdateDirectoryStatus(data.Id, 4);
+                            Log.Information("Update DirectoryStatus in Folderbackup to 4");
+                        }
+                        
                         Log.Information($"[ERROR] {ex.Message}");
 
                     }
@@ -67,7 +80,7 @@ namespace Extractor
 
                 await channel.BasicConsumeAsync(
                     queue: "HubspotExtractor",
-                    autoAck: false, 
+                    autoAck: false,
                     consumer: consumer
                 );
 
@@ -82,3 +95,5 @@ namespace Extractor
         }
     }
 }
+
+

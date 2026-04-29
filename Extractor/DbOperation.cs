@@ -98,7 +98,7 @@ namespace Extractor
         /// <summary>
         /// Retrieves the access token associated with the specified user identifier.
         /// </summary>
-        public static string GetAccessToken(int user)
+        public static string GetAccessToken()
         {
             try
             {
@@ -110,7 +110,7 @@ namespace Extractor
                     {
                         cmd.CommandType = CommandType.StoredProcedure;
                         cmd.Parameters.AddWithValue("@IsGetAccessToken", 1);
-                        cmd.Parameters.AddWithValue("@UuserId", user);
+                        cmd.Parameters.AddWithValue("@UuserId", 1);
 
                         using (SqlDataReader reader = cmd.ExecuteReader())
                         {
@@ -134,7 +134,7 @@ namespace Extractor
         /// <summary>
         /// Retrieves the saved search filter for the specified user and object type.
         /// </summary>
-        public static (string nameKeyword, DateTime? dateFrom, DateTime? dateTo) GetSearchFilter(int userId, string objectType)
+        public static (string nameKeyword, DateTime? dateFrom, DateTime? dateTo) GetSearchFilter()
         {
             try
             {
@@ -146,8 +146,7 @@ namespace Extractor
                         cmd.CommandType = CommandType.StoredProcedure;
 
                         cmd.Parameters.AddWithValue("@IsGetSearchFilter", 1);
-                        cmd.Parameters.AddWithValue("@UserId", userId);
-                        cmd.Parameters.AddWithValue("@ObjectType", objectType);
+                        cmd.Parameters.AddWithValue("@UserId", 1);
 
                         using (SqlDataReader reader = cmd.ExecuteReader())
                         {
